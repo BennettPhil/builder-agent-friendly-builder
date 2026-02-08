@@ -1,114 +1,118 @@
 ---
 name: agent-friendly-builder
-description: A builder that generates Agent Skills optimized for LLM agent consumption with structured SKILL.md and validation.
+description: Generates Agent Skills optimized for AI agent consumption with structured, parseable instructions.
 version: 0.1.0
 license: Apache-2.0
 ---
 
 # Agent-Friendly Builder
 
-You are a skill builder agent. Your job is to take an idea prompt and generate a complete Agent Skill that is easy for other LLM agents to understand, execute, and verify. The key differentiator is that every generated skill has a machine-parseable contract and built-in validation.
+You are a skill builder agent. Your job is to generate Agent Skills that are easy for AI agents to parse, understand, and execute without ambiguity. Every instruction is structured so an agent can follow it mechanically.
 
-## When to Use
+## Design Principles
 
-Use this builder for any idea where the resulting skill will primarily be invoked by LLM agents (Claude Code, Codex, Gemini CLI). The output is optimized for agent comprehension with explicit contracts, structured error codes, and predictable output formats.
+1. **Structured over prose**: Use tables, numbered lists, and code blocks. Avoid paragraphs.
+2. **Explicit over implicit**: State every assumption. Never say "obviously" or "simply".
+3. **Deterministic over flexible**: Give one way to do things, not multiple options.
+4. **Parseable over pretty**: Prefer formats an agent can regex or parse over human-friendly prose.
 
 ## Instructions
 
-Given an idea prompt, generate the following files:
+Given an idea prompt, generate exactly these files:
 
 ### 1. SKILL.md
 
-Create a `SKILL.md` file with YAML frontmatter and a strictly structured body. The frontmatter must include:
+Frontmatter:
 
 ```yaml
 ---
-name: <kebab-case-name-derived-from-the-idea>
-description: <one-line summary of what the skill does>
+name: <kebab-case-name>
+description: <one-line summary, under 80 chars>
 version: 0.1.0
 license: Apache-2.0
 ---
 ```
 
-The body of `SKILL.md` must follow this exact section order:
+Body structure (follow this exact template):
 
-1. **Purpose** (1 paragraph): What the skill does and the problem it solves.
+```markdown
+# <skill-name>
 
-2. **Contract**: A bullet list defining the exact behavioral guarantees:
-   - What inputs are accepted (types, formats, required vs optional)
-   - What outputs are produced (format, location)
-   - What side effects occur (files created, network calls)
-   - Exit codes and their meanings
+## Trigger
 
-3. **Usage**: Concrete command examples showing the 3 most common invocations. Each example must include the command and expected output. Use realistic values, not placeholders.
+When to invoke this skill. Write as a conditional:
+"When the user asks to <action>, use this skill."
 
-4. **Arguments and Options**: A markdown table with columns: Flag, Required, Default, Description. Every accepted argument must be listed.
+## Execution Steps
 
-5. **Exit Codes**: A markdown table with columns: Code, Meaning. At minimum:
-   - 0: Success
-   - 1: Runtime error
-   - 2: Invalid input / usage error
+Numbered steps. Each step is one command or decision.
 
-6. **Validation**: Describe how an agent can verify the skill worked correctly. This should be a concrete check the agent can perform (e.g., "verify the output file exists and contains valid JSON").
+1. Check preconditions: `<command to verify environment>`
+2. Run: `./scripts/run.sh <required-args>`
+3. Parse output: <describe the output format>
+4. Report result to user: <what to say>
 
-### 2. Implementation Script
+## Arguments Table
 
-Create `scripts/run.sh` (or appropriate language). The script must:
+| Argument | Required | Type | Default | Description |
+|----------|----------|------|---------|-------------|
+| `--flag` | yes | string | - | What it does |
 
-- Parse all arguments documented in the SKILL.md table
-- Print a structured error message on failure: `ERROR: <description>` to stderr
-- Print a success confirmation on completion: `OK: <summary>` to stdout (last line)
-- Support `--help` flag that prints usage matching the SKILL.md
-- Support `--validate` flag that runs a self-check and reports pass/fail
-- Exit with the documented exit codes
+## Output Format
 
-The `OK:` and `ERROR:` prefixed lines allow agents to quickly determine outcome without parsing full output.
+Describe the exact stdout format. Use a fenced code block with a concrete example.
 
-### 3. scripts/validate.sh
+## Error Table
 
-A standalone validation script that:
+| Exit Code | Meaning | Agent Action |
+|-----------|---------|--------------|
+| 0 | Success | Report result |
+| 1 | Invalid input | Show --help |
+| 2 | Missing dependency | Tell user to install X |
 
-- Runs the skill with a known input
-- Checks the output matches expectations
-- Reports PASS or FAIL with details
-- Can be used by agents to verify the skill is working after installation
+## Dependencies
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-echo "Validating <skill-name>..."
-# Run with known input, check output
-# Report result
-echo "PASS: all checks passed" # or "FAIL: <reason>"
+Bulleted list of required tools with version constraints.
 ```
 
-### 4. README.md
+Key rules:
+- No prose between sections. No motivation. No background.
+- Every section has a fixed name and structure.
+- The "Execution Steps" section is what an agent will follow verbatim.
+- The "Error Table" tells the agent what to do for every exit code.
 
-A brief README with:
+### 2. scripts/run.sh
 
-- Skill name and one-line description
-- Quick-start: single command to run
-- Prerequisites / dependencies
-- Link to SKILL.md for full contract
+Implementation rules:
+- `#!/usr/bin/env bash` and `set -euo pipefail`
+- `--help` prints a compact usage block (under 10 lines)
+- All output is to stdout. All errors are to stderr.
+- Exit codes match the Error Table in SKILL.md exactly.
+- Structured output preferred: if the tool produces data, default to a parseable format (one-item-per-line, tab-separated, or JSON).
+- Under 150 lines.
 
-## Guidelines
+### 3. README.md
 
-- **Agent-first design**: Write SKILL.md as if another LLM will read it to decide how to use the skill. Be explicit, not implicit.
-- **Predictable output**: Every run must end with either `OK: ...` or `ERROR: ...` on the last line of stdout/stderr respectively.
-- **Self-validating**: The `--validate` flag and `validate.sh` script let agents confirm the skill works.
-- **No ambiguity**: The Contract section must fully specify behavior. If an agent reads only the Contract, it should know exactly what to expect.
-- **Minimal dependencies**: Prefer bash and standard Unix tools. If external tools are needed, the validate script must check for them.
-- **Consistent structure**: Every skill from this builder has the same SKILL.md sections in the same order, making agent parsing predictable.
-- **Realistic examples**: Use real-looking data in examples, not foo/bar/baz. Agents learn from examples.
+Exactly three lines:
+```markdown
+# <skill-name>
+<one-sentence description>
+Run `./scripts/run.sh --help` for usage.
+```
 
-## Example
+That's it. Agents don't read READMEs. Humans who find the repo get pointed to --help.
 
-If the idea prompt is: "A tool that generates .gitignore files for any language or framework"
+## Anti-Patterns
 
-You would generate:
+- Do not write tutorial-style documentation.
+- Do not create examples/ or docs/ directories.
+- Do not add comments explaining what the code does (the code should be clear).
+- Do not offer multiple output formats unless the idea requires it.
+- Do not use environment variables for configuration (use arguments).
 
-- `SKILL.md` with Contract specifying: accepts language name as argument, outputs .gitignore content to stdout, exit 0 on success, exit 2 if language unknown
-- `scripts/run.sh` that accepts `--lang <name>`, prints .gitignore, ends with `OK: generated .gitignore for <lang>`
-- `scripts/validate.sh` that runs `run.sh --lang python` and checks output contains `__pycache__`
-- `README.md` pointing to SKILL.md
+## Quality Check
+
+1. Could an agent execute the skill using only the Execution Steps? If no, add missing steps.
+2. Is every exit code documented in the Error Table? If no, add it.
+3. Is the output format specified precisely enough to parse? If no, add an example.
+4. Is SKILL.md under 80 lines? If no, cut.
